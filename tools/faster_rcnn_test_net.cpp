@@ -18,7 +18,7 @@ namespace bp = boost::python;
 #include "caffe/util/misc.hpp"
 #include "opencv/cv.h"
 #include "opencv2/highgui.hpp"
-#include <ctime>
+#include <boost/timer/timer.hpp>
 
 #include <iostream>
 #include <fstream>
@@ -335,7 +335,7 @@ void vis_detections_print_to_file(cv::Mat& im, const string& image_name,
     }
 
     string im_name = image_name+"."+class_name+".png";
-    cv::imwrite(im_name, im);
+//    cv::imwrite(im_name, im);
 }
 
 template<typename Dtype>
@@ -390,13 +390,11 @@ void demo_print_to_file(shared_ptr<Net<Dtype> > net,
     std::vector<Box<float> > boxes, pred_boxes;
     shared_ptr<Blob<float> > scores; // scores and pred_boxes for foreground objects and background
 
-    clock_t start, finish;
-    start = clock();
     // Detect all object classes and regress object bounds
-    scores = caffe::im_detect<Dtype>(net, im, boxes, pred_boxes);
-    finish = clock();
-    double  duration = (double)(finish - start) / CLOCKS_PER_SEC;
-    LOG(INFO)<<"Detection took "<<duration<< "s for "<<boxes.size()<<" object proposals.";
+    {
+        boost::timer::auto_cpu_timer t;
+        scores = caffe::im_detect<Dtype>(net, im, boxes, pred_boxes);
+    }
 
     // The following prints all detections 
     float CONF_THRESH = 0.3;
