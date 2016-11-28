@@ -73,7 +73,36 @@ void ROIPoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     const Dtype bin_size_w = static_cast<Dtype>(roi_width)
                              / static_cast<Dtype>(pooled_width_);
 
+
     const Dtype* batch_data = bottom_data + bottom[0]->offset(roi_batch_ind);
+
+    std::vector<int> vhstart, vwstart, vhend, vwend;
+
+    for (int ph = 0; ph < pooled_height_; ++ph) {
+            for (int pw = 0; pw < pooled_width_; ++pw) {
+              // Compute pooling region for this output unit:
+              //  start (included) = floor(ph * roi_height / pooled_height_)
+              //  end (excluded) = ceil((ph + 1) * roi_height / pooled_height_)
+              int hstart = static_cast<int>(floor(static_cast<Dtype>(ph)
+                                                  * bin_size_h));
+              int wstart = static_cast<int>(floor(static_cast<Dtype>(pw)
+                                                  * bin_size_w));
+              int hend = static_cast<int>(ceil(static_cast<Dtype>(ph + 1)
+                                               * bin_size_h));
+              int wend = static_cast<int>(ceil(static_cast<Dtype>(pw + 1)
+                                               * bin_size_w));
+
+              hstart = min(max(hstart + roi_start_h, 0), height_);
+              hend = min(max(hend + roi_start_h, 0), height_);
+              wstart = min(max(wstart + roi_start_w, 0), width_);
+              wend = min(max(wend + roi_start_w, 0), width_);
+
+              vhstart.push_back(hstart);
+              vwstart.push_back(wstart);
+              vhend.push_back(hend);
+              vwend.push_back(wend);
+            }
+    }
 
     for (int c = 0; c < channels_; ++c) {
       for (int ph = 0; ph < pooled_height_; ++ph) {
@@ -81,43 +110,37 @@ void ROIPoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
           // Compute pooling region for this output unit:
           //  start (included) = floor(ph * roi_height / pooled_height_)
           //  end (excluded) = ceil((ph + 1) * roi_height / pooled_height_)
-          int hstart = static_cast<int>(floor(static_cast<Dtype>(ph)
-                                              * bin_size_h));
-          int wstart = static_cast<int>(floor(static_cast<Dtype>(pw)
-                                              * bin_size_w));
-          int hend = static_cast<int>(ceil(static_cast<Dtype>(ph + 1)
-                                           * bin_size_h));
-          int wend = static_cast<int>(ceil(static_cast<Dtype>(pw + 1)
-                                           * bin_size_w));
 
-          hstart = min(max(hstart + roi_start_h, 0), height_);
-          hend = min(max(hend + roi_start_h, 0), height_);
-          wstart = min(max(wstart + roi_start_w, 0), width_);
-          wend = min(max(wend + roi_start_w, 0), width_);
+          const int pool_index = ph * pooled_width_ + pw;
+          int hstart = vhstart[pool_index];
+          int wstart = vwstart[pool_index];
+          int hend = vhend[pool_index];
+          int wend = vwend[pool_index];
 
           bool is_empty = (hend <= hstart) || (wend <= wstart);
 
-          const int pool_index = ph * pooled_width_ + pw;
           if (is_empty) {
             top_data[pool_index] = 0;
-            argmax_data[pool_index] = -1;
+            //argmax_data[pool_index] = -1;
           }
 
+          Dtype roi_max = top_data[pool_index];
           for (int h = hstart; h < hend; ++h) {
             for (int w = wstart; w < wend; ++w) {
               const int index = h * width_ + w;
-              if (batch_data[index] > top_data[pool_index]) {
-                top_data[pool_index] = batch_data[index];
-                argmax_data[pool_index] = index;
+              if (batch_data[index] > roi_max) {
+                roi_max = batch_data[index];
+                //argmax_data[pool_index] = index;
               }
             }
           }
+          top_data[pool_index] = roi_max;
         }
       }
       // Increment all data pointers by one channel
       batch_data += bottom[0]->offset(0, 1);
       top_data += top[0]->offset(0, 1);
-      argmax_data += max_idx_.offset(0, 1);
+      //argmax_data += max_idx_.offset(0, 1);
     }
     // Increment ROI data pointer
     bottom_rois += bottom[1]->offset(1);

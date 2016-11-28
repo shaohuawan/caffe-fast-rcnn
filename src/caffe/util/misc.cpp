@@ -10,10 +10,10 @@ using std::min;
 using std::floor;
 using std::ceil;
 
-std::vector<int> TESTSCALES(1, 600); 
+std::vector<int> TESTSCALES(1, 480); 
 bool TEST_HAS_RPN = true;
 bool TEST_BBOX_REG = true;
-int TEST_MAX_SIZE = 1000;
+int TEST_MAX_SIZE = 800;
 
 template <typename Dtype>
 std::vector<int> nms(const std::vector<Box<Dtype> >& boxes, 
@@ -299,12 +299,8 @@ template<typename Dtype>
 shared_ptr<Blob<Dtype> > _get_image_blob(const cv::Mat& im, 
                                          std::vector<Dtype>& im_scale_factors)
 {
-    cv::Mat im_orig;
-    im.convertTo(im_orig, CV_32F); 
-    im_orig = im_orig - PIXEL_MEANS;
-
-    int im_size_min = min( im_orig.rows, im_orig.cols );
-    int im_size_max = max( im_orig.rows, im_orig.cols );
+    int im_size_min = min( im.rows, im.cols );
+    int im_size_max = max( im.rows, im.cols );
 
     std::vector<cv::Mat> processed_ims;
 
@@ -316,10 +312,12 @@ shared_ptr<Blob<Dtype> > _get_image_blob(const cv::Mat& im,
         if ( round(im_scale * im_size_max) > TEST_MAX_SIZE )
             im_scale = Dtype(TEST_MAX_SIZE) / Dtype(im_size_max);
 
-        cv::Mat im_resized;
-        cv::resize(im_orig, im_resized, cv::Size(), im_scale, im_scale, cv::INTER_LINEAR);
+        cv::Mat im_resized, im_float;
+        cv::resize(im, im_resized, cv::Size(), im_scale, im_scale, cv::INTER_LINEAR);
+        im_resized.convertTo(im_float, CV_32F); 
+        im_float = im_float - PIXEL_MEANS;
         im_scale_factors.push_back(im_scale);
-        processed_ims.push_back(im_resized);
+        processed_ims.push_back(im_float);
     }
 
     // Create a blob to hold the input images
@@ -417,11 +415,13 @@ shared_ptr<Blob<Dtype> > im_list_to_blob(const std::vector<cv::Mat>& ims)
 
     shared_ptr<Blob<Dtype> > blob( new Blob<Dtype>( num_images, 3, height_max, width_max) ); 
 
+    int ptr = blob->offset(0,0,0,0);
     for(int i=0; i<num_images; i++)
         for(int j=0; j<3; j++)
             for(int k=0; k<ims[i].rows; k++)
                 for(int l=0; l<ims[i].cols; l++)
-                    blob->mutable_cpu_data()[blob->offset(i,j,k,l)] = 
+//                    blob->mutable_cpu_data()[blob->offset(i,j,k,l)] = 
+                    blob->mutable_cpu_data()[ptr++] = 
                         ims[i].at<cv::Vec3f>(k,l)[j];
     return blob;
 }
